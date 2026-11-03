@@ -359,7 +359,7 @@ export const AdminDashboardPage: React.FC = () => {
       {cargandoLista ? (
         <div className="card-pine rounded-3xl p-12 text-center">
           <RefreshCw className="w-8 h-8 text-gold-400 animate-spin mx-auto mb-3" />
-          <p className="text-cream-100 font-medium">Cargando tus sorteos desde MySQL...</p>
+          <p className="text-cream-100 font-medium">Cargando tus sorteos...</p>
         </div>
       ) : sorteos.length === 0 ? (
         <div className="card-cream rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto">
@@ -741,8 +741,8 @@ export const AdminDashboardPage: React.FC = () => {
         titulo="🎁 ¿Realizar el sorteo ahora?"
         descripcion={`Se asignará aleatoriamente un Amigo Secreto para cada uno de los ${
           sorteoActual?.total_participantes || 0
-        } participantes registrados. Nadie se regalará a sí mismo y las asignaciones quedarán guardadas de forma segura en MySQL.`}
-        textoConfirmar="¡Sí, realizar sorteo!"
+        } participantes registrados.`}
+        textoConfirmar="Realizar sorteo"
         cargando={procesandoAccion}
         onConfirmar={handleConfirmarEjecutarSorteo}
         onCancelar={() => setModalSorteoAbierto(false)}
@@ -751,9 +751,8 @@ export const AdminDashboardPage: React.FC = () => {
       {/* Modal 3: Confirmar retiro de participante */}
       <ConfirmModal
         abierto={!!participanteAEliminar}
-        titulo="¿Retirar participante?"
-        descripcion={`¿Estás seguro de que deseas retirar al usuario "${participanteAEliminar?.nombre}" de este sorteo?`}
-        textoConfirmar="Sí, retirar participante"
+        titulo={`¿Retirar a "${participanteAEliminar?.nombre}"?`}
+        textoConfirmar="Retirar"
         variante="danger"
         cargando={procesandoAccion}
         onConfirmar={handleConfirmarRetirarParticipante}
@@ -763,21 +762,20 @@ export const AdminDashboardPage: React.FC = () => {
       {/* Modal 4: Confirmar reinicio administrativo explícito */}
       <ConfirmModal
         abierto={modalReiniciarAbierto}
-        titulo="⚠️ Reinicio Administrativo del Sorteo"
-        descripcion="Esta acción eliminará todas las asignaciones secretas actuales de la base de datos y volverá a abrir las inscripciones para permitir modificar participantes y sortear de nuevo. ¿Confirmas el reinicio?"
-        textoConfirmar="Confirmar reinicio total"
+        titulo="¿Reiniciar este sorteo?"
+        textoConfirmar="Reiniciar"
         variante="danger"
         cargando={procesandoAccion}
         onConfirmar={handleConfirmarReinicioAdmin}
         onCancelar={() => setModalReiniciarAbierto(false)}
       />
 
-      {/* Modal 5: Confirmar eliminación definitiva del sorteo y todos sus datos */}
+      {/* Modal 5: Confirmar eliminación del sorteo */}
       <ConfirmModal
         abierto={modalEliminarSorteoAbierto}
-        titulo="🗑️ ¿Eliminar este sorteo definitivamente?"
-        descripcion={`Se eliminará por completo el sorteo "${sorteoActual?.nombre}" (${sorteoActual?.codigo_unico}), junto con todos sus participantes registrados y todas las asignaciones secretas en la base de datos MySQL. Esta acción no se puede deshacer.`}
-        textoConfirmar="Sí, eliminar todo de la BD"
+        titulo="¿Eliminar este sorteo?"
+        textoConfirmar="Eliminar"
+        textoCancelar="Cancelar"
         variante="danger"
         cargando={procesandoAccion}
         onConfirmar={handleConfirmarEliminarSorteo}

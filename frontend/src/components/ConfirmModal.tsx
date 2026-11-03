@@ -4,7 +4,7 @@ import { AlertTriangle, X } from 'lucide-react';
 interface ConfirmModalProps {
   abierto: boolean;
   titulo: string;
-  descripcion: string;
+  descripcion?: string;
   textoConfirmar: string;
   textoCancelar?: string;
   variante?: 'danger' | 'primary';
@@ -43,7 +43,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-3.5 mb-4">
+        <div className={`flex items-center gap-3.5 ${descripcion ? 'mb-4' : 'mb-6'}`}>
           <div
             className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
               variante === 'danger'
@@ -53,14 +53,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           >
             <AlertTriangle className="w-6 h-6" />
           </div>
-          <h3 id="modal-title" className="font-display font-bold text-xl text-pine-900">
+          <h3 id="modal-title" className="font-display font-bold text-xl text-pine-900 pr-6">
             {titulo}
           </h3>
         </div>
 
-        <p className="text-pine-800/90 text-sm sm:text-base leading-relaxed mb-6">
-          {descripcion}
-        </p>
+        {descripcion && (
+          <p className="text-pine-800/90 text-sm sm:text-base leading-relaxed mb-6">
+            {descripcion}
+          </p>
+        )}
 
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
           <button
@@ -88,4 +90,3 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     </div>
   );
 };
-

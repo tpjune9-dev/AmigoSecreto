@@ -510,7 +510,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     });
 
     res.json({
-      mensaje: `El sorteo "${sorteo.nombre}" (${sorteo.codigo_unico}), sus participantes y sus asignaciones fueron eliminados definitivamente de la base de datos.`,
+      mensaje: `El sorteo "${sorteo.nombre}" fue eliminado.`,
     });
   } catch (error) {
     console.error('Error al eliminar sorteo:', error);
