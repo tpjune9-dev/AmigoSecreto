@@ -472,4 +472,52 @@ router.post('/:id/reiniciar', async (req: Request, res: Response): Promise<void>
   }
 });
 
+// Eliminar un sorteo por completo junto con todos sus participantes y asignaciones en MySQL
+router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sorteoId = Number(req.params.id);
+    if (isNaN(sorteoId)) {
+      res.status(400).json({ error: 'Identificador de sorteo inválido.' });
+      return;
+    }
+
+    const sorteo = await prisma.sorteo.findFirst({
+      where: {
+        id: sorteoId,
+        administrador_id: req.admin!.adminId,
+      },
+    });
+
+    if (!sorteo) {
+      res.status(404).json({
+        error: 'Sorteo no encontrado o no tienes permisos para eliminarlo.',
+      });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.asignacion.deleteMany({
+        where: { sorteo_id: sorteoId },
+      });
+
+      await tx.participante.deleteMany({
+        where: { sorteo_id: sorteoId },
+      });
+
+      await tx.sorteo.delete({
+        where: { id: sorteoId },
+      });
+    });
+
+    res.json({
+      mensaje: `El sorteo "${sorteo.nombre}" (${sorteo.codigo_unico}), sus participantes y sus asignaciones fueron eliminados definitivamente de la base de datos.`,
+    });
+  } catch (error) {
+    console.error('Error al eliminar sorteo:', error);
+    res.status(500).json({
+      error: 'Error interno al eliminar el sorteo de la base de datos.',
+    });
+  }
+});
+
 export default router;

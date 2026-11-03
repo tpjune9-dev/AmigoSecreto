@@ -30,6 +30,7 @@ import {
   retirarParticipanteSorteo,
   ejecutarSorteo,
   reiniciarSorteoAdmin,
+  eliminarSorteoAdmin,
   construirEnlaceInvitacion,
   construirEnlaceResultado,
   generarUrlWhatsAppCompartirInvitacion,
@@ -55,6 +56,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [modalCerrarAbierto, setModalCerrarAbierto] = useState(false);
   const [modalSorteoAbierto, setModalSorteoAbierto] = useState(false);
   const [modalReiniciarAbierto, setModalReiniciarAbierto] = useState(false);
+  const [modalEliminarSorteoAbierto, setModalEliminarSorteoAbierto] = useState(false);
   const [procesandoAccion, setProcesandoAccion] = useState(false);
 
   const cargarDetalle = useCallback(
@@ -292,6 +294,22 @@ export const AdminDashboardPage: React.FC = () => {
       await cargarDetalle(sorteoActual.id);
     } catch (err: any) {
       showToast(err.message || 'Error al reiniciar el sorteo.', 'error');
+    } finally {
+      setProcesandoAccion(false);
+    }
+  };
+
+  const handleConfirmarEliminarSorteo = async () => {
+    if (!sorteoActual || !token) return;
+    setProcesandoAccion(true);
+    try {
+      const res = await eliminarSorteoAdmin(token, sorteoActual.id);
+      showToast(res.mensaje, 'success');
+      setModalEliminarSorteoAbierto(false);
+      setSearchParams({});
+      await cargarSorteos();
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar el sorteo.', 'error');
     } finally {
       setProcesandoAccion(false);
     }
@@ -591,21 +609,44 @@ export const AdminDashboardPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 text-xs text-cream-200/75 px-1">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-cream-200/75 px-1">
                         <span className="flex items-center gap-1.5">
                           <ShieldAlert className="w-4 h-4 text-gold-400 shrink-0" />
                           Por privacidad, las asignaciones secretas están encriptadas y no son
                           visibles para el administrador.
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setModalReiniciarAbierto(true)}
-                          className="shrink-0 inline-flex items-center gap-1 text-red-300 hover:text-red-200 underline font-semibold"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          Reinicio administrativo
-                        </button>
+                        <div className="flex items-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => setModalReiniciarAbierto(true)}
+                            className="shrink-0 inline-flex items-center gap-1 text-gold-300 hover:text-gold-200 underline font-semibold"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Reiniciar sorteo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModalEliminarSorteoAbierto(true)}
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-crimson-600/90 hover:bg-crimson-500 text-cream-50 font-bold shadow-sm transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Eliminar sorteo
+                          </button>
+                        </div>
                       </div>
+                    </div>
+                  )}
+
+                  {sorteoActual.estado !== 'SORTEO_REALIZADO' && (
+                    <div className="mt-4 pt-3 border-t border-gold-500/15 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setModalEliminarSorteoAbierto(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-red-300 hover:text-cream-50 hover:bg-crimson-600/80 transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Eliminar este sorteo</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -729,6 +770,18 @@ export const AdminDashboardPage: React.FC = () => {
         cargando={procesandoAccion}
         onConfirmar={handleConfirmarReinicioAdmin}
         onCancelar={() => setModalReiniciarAbierto(false)}
+      />
+
+      {/* Modal 5: Confirmar eliminación definitiva del sorteo y todos sus datos */}
+      <ConfirmModal
+        abierto={modalEliminarSorteoAbierto}
+        titulo="🗑️ ¿Eliminar este sorteo definitivamente?"
+        descripcion={`Se eliminará por completo el sorteo "${sorteoActual?.nombre}" (${sorteoActual?.codigo_unico}), junto con todos sus participantes registrados y todas las asignaciones secretas en la base de datos MySQL. Esta acción no se puede deshacer.`}
+        textoConfirmar="Sí, eliminar todo de la BD"
+        variante="danger"
+        cargando={procesandoAccion}
+        onConfirmar={handleConfirmarEliminarSorteo}
+        onCancelar={() => setModalEliminarSorteoAbierto(false)}
       />
     </div>
   );

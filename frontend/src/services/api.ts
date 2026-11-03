@@ -200,6 +200,16 @@ export async function reiniciarSorteoAdmin(
   });
 }
 
+export async function eliminarSorteoAdmin(
+  token: string,
+  sorteoId: number
+): Promise<{ mensaje: string }> {
+  return request(`/sorteos/${sorteoId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // --- Endpoints Públicos (Participantes y Resultados con Código + Nombre de Usuario + PIN) ---
 
 export async function validarCodigoSorteo(
