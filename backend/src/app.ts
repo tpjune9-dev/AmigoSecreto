@@ -10,9 +10,11 @@ dotenv.config();
 
 const app = express();
 
-// En producción detrás de proxy reverso (Render, Railway, Nginx, Cloudflare), confiar en X-Forwarded-For y redirigir a HTTPS
+// Confiar en proxy reverso (Cloudflare Tunnel, Render, Railway, Nginx) para X-Forwarded-For en rate-limiting
+app.set('trust proxy', 1);
+
+// En producción, redirigir HTTP a HTTPS
 if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
       res.redirect(301, `https://${req.headers.host}${req.url}`);
@@ -23,7 +25,19 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Cabeceras de seguridad HTTP
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  })
+);
+
+// Permitir peticiones desde contextos HTTPS públicos (como GitHub Pages) hacia localhost (Private Network Access)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.headers['access-control-request-private-network']) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  next();
+});
 
 // Configuración de CORS restringida al frontend autorizado
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
@@ -42,6 +56,8 @@ app.use(
       if (
         allowedOrigins.includes('*') ||
         allowedOrigins.includes(cleanOrigin) ||
+        cleanOrigin.endsWith('.github.io') ||
+        cleanOrigin.endsWith('.trycloudflare.com') ||
         (process.env.NODE_ENV !== 'production' && cleanOrigin.startsWith('http://localhost:'))
       ) {
         callback(null, true);

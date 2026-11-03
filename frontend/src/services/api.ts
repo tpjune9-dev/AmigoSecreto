@@ -61,7 +61,13 @@ export interface RespuestaNotificacionWhatsApp {
   mensajeEstado: string;
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+const ENV_API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+
+const API_BASE_URL =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:4000/api'
+    : ENV_API_URL;
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -70,10 +76,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error(
+      'No se pudo conectar con el servidor de Amigo Secreto. Verifica tu conexión o que el servidor backend esté activo.'
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
 
