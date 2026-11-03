@@ -5,7 +5,6 @@ import { prisma } from '../config/prisma';
 import { requireAdminAuth } from '../middleware/auth';
 import { generarCodigoUnicoSorteo } from '../utils/codeGenerator';
 import { generarAsignacionesSinPuntosFijos } from '../utils/drawAlgorithm';
-import { procesarNotificacionesWhatsApp } from '../services/whatsappService';
 
 const router = Router();
 
@@ -139,8 +138,6 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
           select: {
             id: true,
             nombre: true,
-            telefono: true,
-            consentimiento: true,
             created_at: true,
           },
           orderBy: { created_at: 'asc' },
@@ -329,7 +326,6 @@ router.post('/:id/ejecutar', async (req: Request, res: Response): Promise<void> 
 
     const resultado = await prisma.$transaction(
       async (tx) => {
-        // Bloqueo de fila en MySQL para impedir ejecuciones simultáneas del mismo sorteo
         const filasSorteo = await tx.$queryRaw<
           Array<{ id: number; administrador_id: number; estado: string; nombre: string }>
         >`SELECT id, administrador_id, estado, nombre FROM sorteos WHERE id = ${sorteoId} FOR UPDATE`;
@@ -476,66 +472,4 @@ router.post('/:id/reiniciar', async (req: Request, res: Response): Promise<void>
   }
 });
 
-// Integración con WhatsApp (enlaces manuales wa.me + API oficial de WhatsApp Business Cloud si está configurada)
-router.post('/:id/notificar-whatsapp', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const sorteoId = Number(req.params.id);
-    const baseFrontendUrl =
-      (typeof req.body?.baseUrl === 'string' && req.body.baseUrl.trim()) ||
-      process.env.FRONTEND_URL ||
-      'http://localhost:5173';
-
-    const sorteo = await prisma.sorteo.findFirst({
-      where: {
-        id: sorteoId,
-        administrador_id: req.admin!.adminId,
-      },
-      include: {
-        participantes: {
-          select: {
-            id: true,
-            nombre: true,
-            telefono: true,
-            consentimiento: true,
-          },
-        },
-      },
-    });
-
-    if (!sorteo) {
-      res.status(404).json({ error: 'Sorteo no encontrado.' });
-      return;
-    }
-
-    if (sorteo.estado !== 'SORTEO_REALIZADO') {
-      res.status(400).json({
-        error: 'Primero debes realizar el sorteo antes de enviar las notificaciones de resultados.',
-      });
-      return;
-    }
-
-    const cleanBase = baseFrontendUrl.replace(/\/$/, '');
-    const enlaceResultado = `${cleanBase}/#/resultado?codigo=${encodeURIComponent(sorteo.codigo_unico)}`;
-
-    const datosParticipantes = sorteo.participantes.map((p) => ({
-      nombre: p.nombre,
-      telefono: p.telefono,
-      codigoSorteo: sorteo.codigo_unico,
-      nombreSorteo: sorteo.nombre,
-      enlaceResultado,
-      consentimiento: p.consentimiento,
-    }));
-
-    const resultadoWhatsApp = await procesarNotificacionesWhatsApp(datosParticipantes);
-
-    res.json(resultadoWhatsApp);
-  } catch (error) {
-    console.error('Error al procesar notificaciones de WhatsApp:', error);
-    res.status(500).json({
-      error: 'Error al preparar o enviar las notificaciones de WhatsApp.',
-    });
-  }
-});
-
 export default router;
-

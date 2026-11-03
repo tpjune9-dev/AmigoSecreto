@@ -12,19 +12,17 @@ import {
   Calendar,
   Coins,
   Users,
-  Phone,
   Clock,
   Check,
-  MessageCircle,
   RotateCcw,
   ShieldAlert,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
   SorteoResumen,
   ParticipanteAdmin,
-  RespuestaNotificacionWhatsApp,
   listarMisSorteos,
   obtenerDetalleSorteo,
   cerrarInscripcionesSorteo,
@@ -32,12 +30,10 @@ import {
   retirarParticipanteSorteo,
   ejecutarSorteo,
   reiniciarSorteoAdmin,
-  prepararNotificacionesWhatsApp,
   construirEnlaceInvitacion,
   construirEnlaceResultado,
   generarUrlWhatsAppCompartirInvitacion,
-  generarUrlWhatsAppParticipanteDirecto,
-  obtenerBaseUrlFrontend,
+  generarUrlWhatsAppCompartirResultados,
 } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -52,6 +48,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [cargandoLista, setCargandoLista] = useState(true);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [copiadoCodigo, setCopiadoCodigo] = useState(false);
+  const [copiadoEnlaceResultado, setCopiadoEnlaceResultado] = useState(false);
 
   // Estados de modales de confirmación
   const [participanteAEliminar, setParticipanteAEliminar] = useState<ParticipanteAdmin | null>(null);
@@ -59,10 +56,6 @@ export const AdminDashboardPage: React.FC = () => {
   const [modalSorteoAbierto, setModalSorteoAbierto] = useState(false);
   const [modalReiniciarAbierto, setModalReiniciarAbierto] = useState(false);
   const [procesandoAccion, setProcesandoAccion] = useState(false);
-
-  // Estado de integración WhatsApp Business API / wa.me
-  const [infoWhatsApp, setInfoWhatsApp] = useState<RespuestaNotificacionWhatsApp | null>(null);
-  const [cargandoWhatsApp, setCargandoWhatsApp] = useState(false);
 
   const cargarDetalle = useCallback(
     async (id: number, mostrarNotificacion = false) => {
@@ -152,7 +145,6 @@ export const AdminDashboardPage: React.FC = () => {
   }
 
   const seleccionarSorteo = (id: number) => {
-    setInfoWhatsApp(null);
     setSearchParams({ sorteoId: String(id) });
     cargarDetalle(id);
   };
@@ -169,13 +161,37 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  const handleCompartirInvitacion = async () => {
+  const handleCopiarEnlaceResultados = async () => {
+    if (!sorteoActual) return;
+    const enlace = construirEnlaceResultado(sorteoActual.codigo_unico);
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setCopiadoEnlaceResultado(true);
+      setTimeout(() => setCopiadoEnlaceResultado(false), 2500);
+      showToast('Enlace de resultados copiado al portapapeles.', 'success');
+    } catch {
+      showToast('No se pudo copiar automáticamente.', 'info');
+    }
+  };
+
+  const handleCompartirInvitacion = () => {
     if (!sorteoActual) return;
     const enlace = construirEnlaceInvitacion(sorteoActual.codigo_unico);
     const urlWhatsApp = generarUrlWhatsAppCompartirInvitacion(
       sorteoActual.nombre,
       sorteoActual.codigo_unico,
       enlace
+    );
+    window.open(urlWhatsApp, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCompartirResultadosGrupo = () => {
+    if (!sorteoActual) return;
+    const enlaceRes = construirEnlaceResultado(sorteoActual.codigo_unico);
+    const urlWhatsApp = generarUrlWhatsAppCompartirResultados(
+      sorteoActual.nombre,
+      sorteoActual.codigo_unico,
+      enlaceRes
     );
     window.open(urlWhatsApp, '_blank', 'noopener,noreferrer');
   };
@@ -273,30 +289,11 @@ export const AdminDashboardPage: React.FC = () => {
       const res = await reiniciarSorteoAdmin(token, sorteoActual.id);
       showToast(res.mensaje, 'info');
       setModalReiniciarAbierto(false);
-      setInfoWhatsApp(null);
       await cargarDetalle(sorteoActual.id);
     } catch (err: any) {
       showToast(err.message || 'Error al reiniciar el sorteo.', 'error');
     } finally {
       setProcesandoAccion(false);
-    }
-  };
-
-  const handleNotificarWhatsAppBackend = async () => {
-    if (!sorteoActual || !token) return;
-    setCargandoWhatsApp(true);
-    try {
-      const res = await prepararNotificacionesWhatsApp(
-        token,
-        sorteoActual.id,
-        obtenerBaseUrlFrontend()
-      );
-      setInfoWhatsApp(res);
-      showToast(res.mensajeEstado, res.configurado ? 'success' : 'info');
-    } catch (err: any) {
-      showToast(err.message || 'Error al procesar notificaciones de WhatsApp.', 'error');
-    } finally {
-      setCargandoWhatsApp(false);
     }
   };
 
@@ -353,7 +350,7 @@ export const AdminDashboardPage: React.FC = () => {
           </h2>
           <p className="text-sm text-pine-700 mb-6">
             Crea tu primer sorteo de Amigo Secreto para obtener un código de invitación y
-            compartirlo por WhatsApp.
+            compartirlo con tus amigos.
           </p>
           <Link
             to="/crear-sorteo"
@@ -550,46 +547,48 @@ export const AdminDashboardPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Sección de comunicación por WhatsApp una vez realizado el sorteo */}
+                  {/* Sección para compartir el enlace de resultados cuando el sorteo ya se realizó */}
                   {sorteoActual.estado === 'SORTEO_REALIZADO' && (
                     <div className="mt-6 pt-5 border-t border-gold-500/25 space-y-4">
                       <div className="bg-pine-950/85 border border-gold-400/40 rounded-2xl p-4 sm:p-5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-display font-bold text-base sm:text-lg text-gold-300 flex items-center gap-2">
-                              <MessageCircle className="w-5 h-5 text-[#25D366]" />
-                              <span>Comunicar resultados por WhatsApp</span>
-                            </h3>
-                            <p className="text-xs sm:text-sm text-cream-200/85 mt-1">
-                              Envía a cada participante su enlace privado por WhatsApp (mediante{' '}
-                              <code className="text-gold-300">wa.me</code> en la lista inferior) o
-                              verifica el envío con WhatsApp Business Cloud API desde el servidor.
-                            </p>
-                          </div>
+                        <h3 className="font-display font-bold text-base sm:text-lg text-gold-300 flex items-center gap-2 mb-1">
+                          <Sparkles className="w-5 h-5 text-gold-400" />
+                          <span>¡Sorteo realizado! Comparte el enlace de resultados</span>
+                        </h3>
+                        <p className="text-xs sm:text-sm text-cream-200/85 mb-4">
+                          Cada participante ya puede entrar con el código{' '}
+                          <strong className="text-gold-300">{sorteoActual.codigo_unico}</strong>, su{' '}
+                          <strong>nombre de usuario</strong> y su <strong>PIN de 6 dígitos</strong>{' '}
+                          para descubrir quién le tocó.
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <button
+                            type="button"
+                            onClick={handleCopiarEnlaceResultados}
+                            className="w-full sm:w-1/2 py-3 px-4 rounded-xl bg-pine-800 hover:bg-pine-700 text-cream-50 font-bold text-xs sm:text-sm border border-gold-400/40 flex items-center justify-center gap-2 transition-all"
+                          >
+                            {copiadoEnlaceResultado ? (
+                              <Check className="w-4 h-4 text-gold-400" />
+                            ) : (
+                              <Copy className="w-4 h-4 text-gold-400" />
+                            )}
+                            <span>
+                              {copiadoEnlaceResultado
+                                ? '¡Enlace copiado!'
+                                : 'Copiar enlace de resultados'}
+                            </span>
+                          </button>
 
                           <button
                             type="button"
-                            disabled={cargandoWhatsApp}
-                            onClick={handleNotificarWhatsAppBackend}
-                            className="shrink-0 px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1ebe57] text-pine-950 font-bold text-xs sm:text-sm transition-all"
+                            onClick={handleCompartirResultadosGrupo}
+                            className="w-full sm:w-1/2 py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#1ebe57] text-pine-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all"
                           >
-                            {cargandoWhatsApp
-                              ? 'Consultando servidor...'
-                              : 'Preparar / Enviar con API Backend'}
+                            <Share2 className="w-4 h-4" />
+                            <span>Compartir enlace en el grupo</span>
                           </button>
                         </div>
-
-                        {infoWhatsApp && (
-                          <div className="mt-3 p-3.5 rounded-xl bg-pine-900 border border-gold-400/30 text-xs sm:text-sm text-cream-100">
-                            <p className="font-semibold text-gold-300 mb-1">
-                              Modalidad activa:{' '}
-                              {infoWhatsApp.configurado
-                                ? 'API Oficial de WhatsApp Business Cloud'
-                                : 'Enlaces directos wa.me (confirmación manual)'}
-                            </p>
-                            <p>{infoWhatsApp.mensajeEstado}</p>
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex items-center justify-between gap-2 text-xs text-cream-200/75 px-1">
@@ -619,7 +618,7 @@ export const AdminDashboardPage: React.FC = () => {
                         Participantes Registrados ({sorteoActual.participantes?.length || 0})
                       </h3>
                       <p className="text-xs sm:text-sm text-pine-700">
-                        Los números de teléfono son visibles únicamente para ti como administrador.
+                        Cada participante tiene un nombre de usuario único dentro de este sorteo.
                       </p>
                     </div>
                   </div>
@@ -632,76 +631,49 @@ export const AdminDashboardPage: React.FC = () => {
                       </p>
                       <p className="text-xs sm:text-sm text-pine-700 mt-1 max-w-md mx-auto">
                         Comparte el código <strong>{sorteoActual.codigo_unico}</strong> o el enlace
-                        de invitación por WhatsApp para que tus amigos se anoten.
+                        de invitación para que tus amigos elijan su nombre de usuario y su PIN.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {sorteoActual.participantes.map((p, index) => {
-                        const enlaceRes = construirEnlaceResultado(sorteoActual.codigo_unico);
-                        const waMeDirecto = generarUrlWhatsAppParticipanteDirecto(
-                          p.telefono,
-                          p.nombre,
-                          sorteoActual.nombre,
-                          sorteoActual.codigo_unico,
-                          enlaceRes
-                        );
-
-                        return (
-                          <div
-                            key={p.id}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white border border-pine-600/15 shadow-sm hover:border-gold-500/60 transition-all"
-                          >
-                            <div className="flex items-start sm:items-center gap-3.5">
-                              <div className="w-9 h-9 rounded-xl bg-pine-800 text-gold-300 font-display font-bold text-sm flex items-center justify-center shrink-0">
-                                {index + 1}
-                              </div>
-                              <div>
-                                <h4 className="font-display font-bold text-base text-pine-900">
-                                  {p.nombre}
-                                </h4>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-pine-700 mt-0.5">
-                                  <span className="inline-flex items-center gap-1 font-semibold text-pine-800">
-                                    <Phone className="w-3.5 h-3.5 text-crimson-600" />
-                                    {p.telefono}
-                                  </span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <Clock className="w-3.5 h-3.5 text-pine-600" />
-                                    {formatearFechaHora(p.created_at)}
-                                  </span>
-                                </div>
-                              </div>
+                      {sorteoActual.participantes.map((p, index) => (
+                        <div
+                          key={p.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white border border-pine-600/15 shadow-sm hover:border-gold-500/60 transition-all"
+                        >
+                          <div className="flex items-start sm:items-center gap-3.5">
+                            <div className="w-9 h-9 rounded-xl bg-pine-800 text-gold-300 font-display font-bold text-sm flex items-center justify-center shrink-0">
+                              {index + 1}
                             </div>
-
-                            <div className="flex items-center justify-end gap-2">
-                              {sorteoActual.estado === 'SORTEO_REALIZADO' && (
-                                <a
-                                  href={waMeDirecto}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#1ebe57] text-pine-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-all"
-                                  title={`Enviar enlace de resultado por WhatsApp a ${p.nombre}`}
-                                >
-                                  <MessageCircle className="w-4 h-4" />
-                                  <span>Avisar por WhatsApp</span>
-                                </a>
-                              )}
-
-                              {sorteoActual.estado !== 'SORTEO_REALIZADO' && (
-                                <button
-                                  type="button"
-                                  onClick={() => setParticipanteAEliminar(p)}
-                                  className="px-3 py-2 rounded-xl text-crimson-600 hover:bg-crimson-50 font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
-                                  title={`Retirar a ${p.nombre} del sorteo`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span>Retirar</span>
-                                </button>
-                              )}
+                            <div>
+                              <h4 className="font-display font-bold text-base text-pine-900 flex items-center gap-1.5">
+                                <User className="w-4 h-4 text-crimson-600" />
+                                <span>{p.nombre}</span>
+                              </h4>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-pine-700 mt-0.5">
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-pine-600" />
+                                  Registrado: {formatearFechaHora(p.created_at)}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        );
-                      })}
+
+                          <div className="flex items-center justify-end gap-2">
+                            {sorteoActual.estado !== 'SORTEO_REALIZADO' && (
+                              <button
+                                type="button"
+                                onClick={() => setParticipanteAEliminar(p)}
+                                className="px-3 py-2 rounded-xl text-crimson-600 hover:bg-crimson-50 font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
+                                title={`Retirar a ${p.nombre} del sorteo`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span>Retirar</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -739,7 +711,7 @@ export const AdminDashboardPage: React.FC = () => {
       <ConfirmModal
         abierto={!!participanteAEliminar}
         titulo="¿Retirar participante?"
-        descripcion={`¿Estás seguro de que deseas retirar a "${participanteAEliminar?.nombre}" (${participanteAEliminar?.telefono}) de este sorteo?`}
+        descripcion={`¿Estás seguro de que deseas retirar al usuario "${participanteAEliminar?.nombre}" de este sorteo?`}
         textoConfirmar="Sí, retirar participante"
         variante="danger"
         cargando={procesandoAccion}
@@ -761,4 +733,3 @@ export const AdminDashboardPage: React.FC = () => {
     </div>
   );
 };
-

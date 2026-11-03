@@ -46,19 +46,17 @@ model Sorteo {
 }
 
 model Participante {
-  id             Int      @id @default(autoincrement())
-  sorteo_id      Int
-  nombre         String   @db.VarChar(120)
-  telefono       String   @db.VarChar(30)
-  pin_hash       String   @db.VarChar(255)
-  consentimiento Boolean  @default(true)
-  created_at     DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  sorteo_id  Int
+  nombre     String   @db.VarChar(120)
+  pin_hash   String   @db.VarChar(255)
+  created_at DateTime @default(now())
 
   sorteo              Sorteo       @relation(fields: [sorteo_id], references: [id], onDelete: Cascade)
   asignacionesOrigen  Asignacion[] @relation("ParticipanteOrigen")
   asignacionesDestino Asignacion[] @relation("ParticipanteDestino")
 
-  @@unique([sorteo_id, telefono], name: "uq_sorteo_telefono")
+  @@unique([sorteo_id, nombre], name: "uq_sorteo_nombre")
   @@index([sorteo_id])
   @@map("participantes")
 }
@@ -79,4 +77,3 @@ model Asignacion {
   @@index([sorteo_id])
   @@map("asignaciones")
 }
-

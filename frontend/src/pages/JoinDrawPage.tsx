@@ -3,7 +3,6 @@ import { useSearchParams, useParams, Link } from 'react-router-dom';
 import {
   Search,
   User,
-  Phone,
   KeyRound,
   CheckCircle2,
   Calendar,
@@ -35,13 +34,10 @@ export const JoinDrawPage: React.FC = () => {
   const [sorteo, setSorteo] = useState<SorteoResumen | null>(null);
   const [buscandoSorteo, setBuscandoSorteo] = useState(false);
 
-  // Campos del participante
+  // Campos del participante (solo nombre de usuario único + PIN)
   const [nombre, setNombre] = useState('');
-  const [prefijoPais, setPrefijoPais] = useState('+51');
-  const [numeroCelular, setNumeroCelular] = useState('');
   const [pin, setPin] = useState('');
   const [confirmacionPin, setConfirmacionPin] = useState('');
-  const [consentimiento, setConsentimiento] = useState(false);
   const [registrando, setRegistrando] = useState(false);
 
   // Estado posterior al registro exitoso
@@ -97,24 +93,12 @@ export const JoinDrawPage: React.FC = () => {
       return;
     }
 
-    if (!consentimiento) {
-      showToast('Debes aceptar el consentimiento para el tratamiento de tus datos.', 'error');
-      return;
-    }
-
-    const soloDigitos = numeroCelular.replace(/\D/g, '');
-    const telefonoCompleto = numeroCelular.trim().startsWith('+')
-      ? numeroCelular.trim()
-      : `${prefijoPais}${soloDigitos}`;
-
     setRegistrando(true);
     try {
       await registrarParticipante(sorteo.codigo_unico, {
         nombre: nombre.trim(),
-        telefono: telefonoCompleto,
         pin,
         confirmacion_pin: confirmacionPin,
-        consentimiento,
       });
 
       setRegistroExitoso(true);
@@ -157,21 +141,21 @@ export const JoinDrawPage: React.FC = () => {
           </h1>
 
           <p className="text-pine-800 text-sm sm:text-base leading-relaxed mb-6">
-            Ya formas parte del sorteo <strong>"{sorteo.nombre}"</strong>. Recibirás tu asignación y
-            podrás descubrir a tu Amigo Secreto ingresando con tu número de WhatsApp y tu PIN
-            personal de 6 dígitos cuando el administrador realice el sorteo.
+            Ya formas parte del sorteo <strong>"{sorteo.nombre}"</strong>. Cuando el administrador
+            realice el sorteo, podrás descubrir a tu Amigo Secreto ingresando con el código, tu
+            nombre de usuario y tu PIN de 6 dígitos.
           </p>
 
           <div className="bg-pine-900 text-cream-50 rounded-2xl p-4 mb-6 text-left border border-gold-400/50">
             <div className="flex items-center gap-2 text-gold-300 text-xs font-bold uppercase tracking-wider mb-1">
               <ShieldCheck className="w-4 h-4" />
-              <span>Recuerda guardar tus datos de acceso</span>
+              <span>Tus datos para consultar tu resultado</span>
             </div>
             <p className="text-xs sm:text-sm text-cream-200">
               Código del sorteo:{' '}
               <strong className="text-gold-400 font-display">{sorteo.codigo_unico}</strong>
               <br />
-              Participante: <strong>{nombre}</strong>
+              Nombre de usuario: <strong className="text-gold-300">{nombre.trim()}</strong>
             </p>
           </div>
 
@@ -183,7 +167,7 @@ export const JoinDrawPage: React.FC = () => {
               className="w-full sm:w-1/2 py-3.5 px-4 rounded-2xl font-display font-bold text-sm bg-[#25D366] hover:bg-[#1ebe57] text-pine-950 shadow-md flex items-center justify-center gap-2 transition-all"
             >
               <Share2 className="w-4 h-4" />
-              <span>Invitar por WhatsApp</span>
+              <span>Compartir sorteo</span>
             </a>
 
             <Link
@@ -209,7 +193,7 @@ export const JoinDrawPage: React.FC = () => {
           Unirme a un sorteo
         </h1>
         <p className="text-sm sm:text-base text-cream-200/85">
-          Ingresa el código compartido por el organizador para registrarte desde tu celular.
+          Ingresa el código del sorteo, elige tu nombre de usuario único y crea tu PIN de 6 dígitos.
         </p>
       </div>
 
@@ -224,7 +208,7 @@ export const JoinDrawPage: React.FC = () => {
             type="text"
             value={codigoInput}
             onChange={(e) => setCodigoInput(e.target.value.toUpperCase())}
-            placeholder="Código del sorteo (ej. AMIGO482)"
+            placeholder="Código del sorteo (ej. AMIGO445)"
             maxLength={20}
             aria-label="Código del sorteo"
             className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-pine-950/80 border border-gold-400/40 text-cream-50 font-display font-bold tracking-wider uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal placeholder:text-cream-300/50 focus:outline-none focus:ring-2 focus:ring-gold-400"
@@ -300,7 +284,7 @@ export const JoinDrawPage: React.FC = () => {
                   htmlFor="part-nombre"
                   className="block text-xs font-bold uppercase tracking-wider text-pine-800 mb-1.5"
                 >
-                  Nombre completo *
+                  Nombre de usuario (único en el sorteo) *
                 </label>
                 <div className="relative">
                   <User className="w-5 h-5 text-pine-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -312,44 +296,12 @@ export const JoinDrawPage: React.FC = () => {
                     maxLength={120}
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
-                    placeholder="Ej. María Fernanda Gómez"
+                    placeholder="Ej. Carlos o Maria_24"
                     className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-pine-500/30 text-pine-900 font-medium focus:outline-none focus:ring-2 focus:ring-crimson-600"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="part-telefono"
-                  className="block text-xs font-bold uppercase tracking-wider text-pine-800 mb-1.5"
-                >
-                  Número de WhatsApp *
-                </label>
-                <div className="flex gap-2">
-                  <div className="w-24 shrink-0">
-                    <input
-                      type="text"
-                      value={prefijoPais}
-                      onChange={(e) => setPrefijoPais(e.target.value)}
-                      aria-label="Prefijo de país"
-                      className="w-full px-3 py-3.5 rounded-xl bg-cream-200 border border-pine-500/30 text-pine-900 font-bold text-center focus:outline-none focus:ring-2 focus:ring-crimson-600"
-                    />
-                  </div>
-                  <div className="relative flex-1">
-                    <Phone className="w-5 h-5 text-pine-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="part-telefono"
-                      type="tel"
-                      required
-                      value={numeroCelular}
-                      onChange={(e) => setNumeroCelular(e.target.value)}
-                      placeholder="987 654 321"
-                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-pine-500/30 text-pine-900 font-medium focus:outline-none focus:ring-2 focus:ring-crimson-600"
-                    />
-                  </div>
-                </div>
                 <p className="text-xs text-pine-700 mt-1">
-                  Se utiliza para identificar tu registro único y enviarte el enlace a tu resultado.
+                  Con este nombre te identificarán tus amigos y no puede repetirse en este sorteo.
                 </p>
               </div>
 
@@ -405,27 +357,9 @@ export const JoinDrawPage: React.FC = () => {
                 </div>
               </div>
               <p className="text-xs text-pine-700 -mt-2">
-                🔒 Tu PIN se guarda encriptado y protege tu resultado para que nadie más pueda
-                consultarlo.
+                🔒 Tu PIN se guarda encriptado y te servirá junto con tu nombre de usuario para ver
+                quién te tocó.
               </p>
-
-              {/* Consentimiento */}
-              <div className="bg-cream-200/90 p-4 rounded-2xl border border-pine-600/20">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={consentimiento}
-                    onChange={(e) => setConsentimiento(e.target.checked)}
-                    className="mt-1 w-5 h-5 rounded border-pine-600 text-crimson-600 focus:ring-crimson-600"
-                  />
-                  <span className="text-xs sm:text-sm text-pine-900 leading-snug">
-                    Acepto el tratamiento de mis datos de registro (nombre y número de WhatsApp)
-                    exclusivamente para la organización y comunicación del resultado de este sorteo
-                    de Amigo Secreto.
-                  </span>
-                </label>
-              </div>
 
               {/* Botón principal obligatorio */}
               <button
@@ -442,4 +376,3 @@ export const JoinDrawPage: React.FC = () => {
     </div>
   );
 };
-

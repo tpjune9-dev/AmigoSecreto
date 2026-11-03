@@ -13,8 +13,6 @@ export interface Administrador {
 export interface ParticipanteAdmin {
   id: number;
   nombre: string;
-  telefono: string;
-  consentimiento: boolean;
   created_at: string;
 }
 
@@ -46,19 +44,6 @@ export interface ResultadoPrivado {
   amigo_secreto: {
     nombre: string;
   };
-}
-
-export interface RespuestaNotificacionWhatsApp {
-  modalidad: 'WA_ME_MANUAL' | 'CLOUD_API_OFICIAL';
-  configurado: boolean;
-  enviados: number;
-  fallidos: number;
-  enlacesManuales: Array<{
-    nombre: string;
-    telefono: string;
-    waMeUrl: string;
-  }>;
-  mensajeEstado: string;
 }
 
 const ENV_API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
@@ -215,19 +200,7 @@ export async function reiniciarSorteoAdmin(
   });
 }
 
-export async function prepararNotificacionesWhatsApp(
-  token: string,
-  sorteoId: number,
-  baseUrl: string
-): Promise<RespuestaNotificacionWhatsApp> {
-  return request(`/sorteos/${sorteoId}/notificar-whatsapp`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ baseUrl }),
-  });
-}
-
-// --- Endpoints Públicos (Participantes y Resultados) ---
+// --- Endpoints Públicos (Participantes y Resultados con Código + Nombre de Usuario + PIN) ---
 
 export async function validarCodigoSorteo(
   codigo: string
@@ -239,10 +212,8 @@ export async function registrarParticipante(
   codigo: string,
   datos: {
     nombre: string;
-    telefono: string;
     pin: string;
     confirmacion_pin: string;
-    consentimiento: boolean;
   }
 ): Promise<{
   mensaje: string;
@@ -257,7 +228,7 @@ export async function registrarParticipante(
 
 export async function consultarResultadoPrivado(datos: {
   codigo: string;
-  telefono: string;
+  nombre: string;
   pin: string;
 }): Promise<ResultadoPrivado> {
   return request('/public/resultado/consultar', {
@@ -274,7 +245,7 @@ export async function recuperarMiAsignacionConToken(
   });
 }
 
-// --- Utilidades de Enlaces y WhatsApp (Modalidad wa.me) ---
+// --- Utilidades de Enlaces para Compartir ---
 
 export function obtenerBaseUrlFrontend(): string {
   const { origin, pathname } = window.location;
@@ -296,19 +267,15 @@ export function generarUrlWhatsAppCompartirInvitacion(
   codigo: string,
   enlaceInvitacion: string
 ): string {
-  const mensaje = `🎄 ¡Hola! Te invito a participar en nuestro sorteo de *Amigo Secreto*: "${nombreSorteo}" 🎁\n\n🔑 Código del sorteo: *${codigo}*\n👉 Regístrate aquí desde tu celular: ${enlaceInvitacion}`;
+  const mensaje = `🎄 ¡Hola! Te invito a participar en nuestro sorteo de *Amigo Secreto*: "${nombreSorteo}" 🎁\n\n🔑 Código del sorteo: *${codigo}*\n👉 Regístrate aquí con tu nombre de usuario y tu PIN: ${enlaceInvitacion}`;
   return `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
 }
 
-export function generarUrlWhatsAppParticipanteDirecto(
-  telefono: string,
-  nombreParticipante: string,
+export function generarUrlWhatsAppCompartirResultados(
   nombreSorteo: string,
   codigo: string,
   enlaceResultado: string
 ): string {
-  const digitos = telefono.replace(/\D/g, '');
-  const mensaje = `🎁 ¡Hola, ${nombreParticipante}! Ya se realizó el sorteo de Amigo Secreto "${nombreSorteo}" (Código: *${codigo}*). Ingresa a tu enlace privado con tu PIN personal para descubrir a quién te toca regalar: ${enlaceResultado} ¡Guarda el secreto! 🤫`;
-  return `https://wa.me/${digitos}?text=${encodeURIComponent(mensaje)}`;
+  const mensaje = `🎉 ¡Ya se realizó el sorteo de *Amigo Secreto*: "${nombreSorteo}"! 🎁\n\n🔑 Código del sorteo: *${codigo}*\n👉 Ingresa con tu nombre de usuario y tu PIN de 6 dígitos para descubrir a quién te toca regalar: ${enlaceResultado}\n🤫 ¡Guarda el secreto!`;
+  return `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
 }
-

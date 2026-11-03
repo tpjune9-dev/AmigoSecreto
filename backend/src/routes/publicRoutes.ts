@@ -3,27 +3,26 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { normalizarTelefono, esTelefonoValido } from '../utils/phoneUtils';
 import { codeLookupLimiter, pinVerificationLimiter } from '../middleware/rateLimiter';
 import { generarTokenParticipante, requireParticipantAuth } from '../middleware/auth';
 
 const router = Router();
 
+function normalizarNombreUsuario(nombre: string): string {
+  return nombre.replace(/\s+/g, ' ').trim();
+}
+
 const registroParticipanteSchema = z.object({
   nombre: z
     .string()
     .trim()
-    .min(2, 'Ingresa tu nombre completo (mínimo 2 caracteres).')
-    .max(120, 'El nombre no puede superar los 120 caracteres.'),
-  telefono: z.string().trim().min(7, 'Ingresa tu número de WhatsApp.'),
+    .min(2, 'Ingresa un nombre de usuario de al menos 2 caracteres.')
+    .max(120, 'El nombre de usuario no puede superar los 120 caracteres.'),
   pin: z
     .string()
     .trim()
     .regex(/^\d{6}$/, 'El PIN personal debe tener exactamente 6 dígitos numéricos.'),
   confirmacion_pin: z.string().trim(),
-  consentimiento: z.boolean().refine((val) => val === true, {
-    message: 'Debes aceptar el consentimiento para el tratamiento de tus datos de registro.',
-  }),
 });
 
 const consultaResultadoSchema = z.object({
@@ -33,14 +32,18 @@ const consultaResultadoSchema = z.object({
     .min(3, 'Ingresa el código del sorteo.')
     .max(20)
     .transform((v) => v.toUpperCase()),
-  telefono: z.string().trim().min(7, 'Ingresa tu número de WhatsApp registrado.'),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'Ingresa tu nombre de usuario registrado.')
+    .max(120),
   pin: z
     .string()
     .trim()
     .regex(/^\d{6}$/, 'Ingresa tu PIN personal de 6 dígitos.'),
 });
 
-// 1. Validar código de sorteo y devolver únicamente información pública (nunca teléfonos ni resultados)
+// 1. Validar código de sorteo y devolver únicamente información pública (nunca asignaciones)
 router.get(
   '/sorteos/codigo/:codigo',
   codeLookupLimiter,
@@ -91,7 +94,7 @@ router.get(
   }
 );
 
-// 2. Registrar participante en un sorteo
+// 2. Registrar participante en un sorteo (código + nombre de usuario único + PIN)
 router.post(
   '/sorteos/:codigo/participantes',
   codeLookupLimiter,
@@ -111,20 +114,12 @@ router.post(
         return;
       }
 
-      const { nombre, telefono, pin, confirmacion_pin, consentimiento } = parsed.data;
+      const { pin, confirmacion_pin } = parsed.data;
+      const nombreLimpio = normalizarNombreUsuario(parsed.data.nombre);
 
       if (pin !== confirmacion_pin) {
         res.status(400).json({
           error: 'El PIN y la confirmación del PIN no coinciden.',
-        });
-        return;
-      }
-
-      const telefonoNormalizado = normalizarTelefono(telefono);
-      if (!esTelefonoValido(telefonoNormalizado)) {
-        res.status(400).json({
-          error:
-            'Ingresa un número de WhatsApp válido (por ejemplo: +51 987654321 o 9 dígitos para Perú).',
         });
         return;
       }
@@ -150,19 +145,17 @@ router.post(
         return;
       }
 
-      // Verificar que no exista el mismo teléfono en este sorteo
-      const duplicado = await prisma.participante.findUnique({
+      // Verificar que no exista el mismo nombre de usuario en este sorteo
+      const duplicado = await prisma.participante.findFirst({
         where: {
-          uq_sorteo_telefono: {
-            sorteo_id: sorteo.id,
-            telefono: telefonoNormalizado,
-          },
+          sorteo_id: sorteo.id,
+          nombre: nombreLimpio,
         },
       });
 
       if (duplicado) {
         res.status(409).json({
-          error: 'Este número de WhatsApp ya se encuentra registrado en este sorteo.',
+          error: 'Este nombre de usuario ya está registrado en este sorteo. Por favor elige otro.',
         });
         return;
       }
@@ -172,17 +165,15 @@ router.post(
       const participante = await prisma.participante.create({
         data: {
           sorteo_id: sorteo.id,
-          nombre,
-          telefono: telefonoNormalizado,
+          nombre: nombreLimpio,
           pin_hash,
-          consentimiento,
         },
       });
 
       res.status(201).json({
         mensaje: '¡Te registraste correctamente! 🎉',
         detalle:
-          'Recibirás tu asignación o podrás consultarla con tu número y PIN cuando el administrador realice el sorteo.',
+          'Podrás consultar tu asignación con el código del sorteo, tu nombre de usuario y tu PIN cuando el administrador realice el sorteo.',
         participante: {
           id: participante.id,
           nombre: participante.nombre,
@@ -192,7 +183,7 @@ router.post(
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         res.status(409).json({
-          error: 'Este número de WhatsApp ya se encuentra registrado en este sorteo.',
+          error: 'Este nombre de usuario ya está registrado en este sorteo. Por favor elige otro.',
         });
         return;
       }
@@ -204,7 +195,7 @@ router.post(
   }
 );
 
-// 3. Autenticar participante con código, teléfono y PIN para consultar su resultado privado
+// 3. Autenticar participante con código, nombre de usuario y PIN para consultar su resultado privado
 router.post(
   '/resultado/consultar',
   pinVerificationLimiter,
@@ -218,8 +209,8 @@ router.post(
         return;
       }
 
-      const { codigo, telefono, pin } = parsed.data;
-      const telefonoNormalizado = normalizarTelefono(telefono);
+      const { codigo, pin } = parsed.data;
+      const nombreLimpio = normalizarNombreUsuario(parsed.data.nombre);
 
       const sorteo = await prisma.sorteo.findUnique({
         where: { codigo_unico: codigo },
@@ -232,19 +223,17 @@ router.post(
         return;
       }
 
-      const participante = await prisma.participante.findUnique({
+      const participante = await prisma.participante.findFirst({
         where: {
-          uq_sorteo_telefono: {
-            sorteo_id: sorteo.id,
-            telefono: telefonoNormalizado,
-          },
+          sorteo_id: sorteo.id,
+          nombre: nombreLimpio,
         },
       });
 
       if (!participante) {
         res.status(401).json({
           error:
-            'Credenciales incorrectas. Verifica tu código de sorteo, número de WhatsApp y PIN personal.',
+            'Credenciales incorrectas. Verifica el código del sorteo, tu nombre de usuario y tu PIN personal.',
         });
         return;
       }
@@ -253,7 +242,7 @@ router.post(
       if (!pinValido) {
         res.status(401).json({
           error:
-            'Credenciales incorrectas. Verifica tu código de sorteo, número de WhatsApp y PIN personal.',
+            'Credenciales incorrectas. Verifica el código del sorteo, tu nombre de usuario y tu PIN personal.',
         });
         return;
       }
@@ -327,7 +316,6 @@ router.get(
   requireParticipantAuth,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      // Si el usuario intenta pasar otro participanteId por query o params, se rechaza o ignora estrictamente
       const requestedId = req.query.participanteId ? Number(req.query.participanteId) : null;
       if (requestedId !== null && requestedId !== req.participant!.participanteId) {
         res.status(403).json({
@@ -411,4 +399,3 @@ router.get(
 );
 
 export default router;
-

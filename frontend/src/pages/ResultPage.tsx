@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
   KeyRound,
-  Phone,
+  User,
   Hash,
   Sparkles,
   Gift,
@@ -19,7 +19,7 @@ import {
   recuperarMiAsignacionConToken,
   ResultadoPrivado,
   construirEnlaceResultado,
-  generarUrlWhatsAppCompartirInvitacion,
+  generarUrlWhatsAppCompartirResultados,
 } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { EnvelopeIllustration, GiftIllustration } from '../components/ChristmasDecorations';
@@ -33,8 +33,7 @@ export const ResultPage: React.FC = () => {
   const codigoUrl = (searchParams.get('codigo') || '').trim().toUpperCase();
 
   const [codigo, setCodigo] = useState(codigoUrl);
-  const [prefijoPais, setPrefijoPais] = useState('+51');
-  const [telefono, setTelefono] = useState('');
+  const [nombre, setNombre] = useState('');
   const [pin, setPin] = useState('');
   const [consultando, setConsultando] = useState(false);
 
@@ -97,16 +96,11 @@ export const ResultPage: React.FC = () => {
       return;
     }
 
-    const soloDigitos = telefono.replace(/\D/g, '');
-    const telefonoCompleto = telefono.trim().startsWith('+')
-      ? telefono.trim()
-      : `${prefijoPais}${soloDigitos}`;
-
     setConsultando(true);
     try {
       const res = await consultarResultadoPrivado({
         codigo: codigo.trim().toUpperCase(),
-        telefono: telefonoCompleto,
+        nombre: nombre.trim(),
         pin,
       });
 
@@ -148,7 +142,7 @@ export const ResultPage: React.FC = () => {
   // Si el participante ya validó sus credenciales, mostrar la tarjeta especial de revelación
   if (resultado) {
     const enlaceSorteo = construirEnlaceResultado(resultado.sorteo.codigo_unico);
-    const urlCompartirWhatsApp = generarUrlWhatsAppCompartirInvitacion(
+    const urlCompartirWhatsApp = generarUrlWhatsAppCompartirResultados(
       resultado.sorteo.nombre,
       resultado.sorteo.codigo_unico,
       enlaceSorteo
@@ -161,7 +155,7 @@ export const ResultPage: React.FC = () => {
             <span className="px-2.5 py-1 rounded-lg bg-pine-900 text-gold-400 font-display">
               {resultado.sorteo.codigo_unico}
             </span>
-            <span>Participante: {resultado.participante.nombre}</span>
+            <span>Usuario: {resultado.participante.nombre}</span>
           </div>
 
           <h2 className="font-display font-bold text-lg text-pine-800 mb-1">
@@ -248,7 +242,7 @@ export const ResultPage: React.FC = () => {
               className="w-full sm:w-1/2 py-3.5 px-4 rounded-2xl font-display font-bold text-xs sm:text-sm bg-cream-200 hover:bg-cream-300 text-pine-900 flex items-center justify-center gap-2 transition-all"
             >
               <LogOut className="w-4 h-4" />
-              <span>Consultar otro participante</span>
+              <span>Consultar otro usuario</span>
             </button>
           </div>
         </div>
@@ -266,8 +260,7 @@ export const ResultPage: React.FC = () => {
           Descubre tu Amigo Secreto
         </h1>
         <p className="text-sm text-cream-200/85">
-          Ingresa el código del sorteo, tu número de WhatsApp registrado y tu PIN personal de 6
-          dígitos.
+          Ingresa el código del sorteo, tu nombre de usuario y tu PIN personal de 6 dígitos.
         </p>
       </div>
 
@@ -289,7 +282,7 @@ export const ResultPage: React.FC = () => {
                 maxLength={20}
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-                placeholder="Ej. AMIGO482"
+                placeholder="Ej. AMIGO445"
                 className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-pine-500/30 text-pine-900 font-display font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-crimson-600"
               />
             </div>
@@ -297,33 +290,24 @@ export const ResultPage: React.FC = () => {
 
           <div>
             <label
-              htmlFor="res-telefono"
+              htmlFor="res-nombre"
               className="block text-xs font-bold uppercase tracking-wider text-pine-800 mb-1.5"
             >
-              Número de WhatsApp registrado *
+              Nombre de usuario registrado *
             </label>
-            <div className="flex gap-2">
-              <div className="w-24 shrink-0">
-                <input
-                  type="text"
-                  value={prefijoPais}
-                  onChange={(e) => setPrefijoPais(e.target.value)}
-                  aria-label="Prefijo telefónico"
-                  className="w-full px-3 py-3.5 rounded-xl bg-cream-200 border border-pine-500/30 text-pine-900 font-bold text-center focus:outline-none focus:ring-2 focus:ring-crimson-600"
-                />
-              </div>
-              <div className="relative flex-1">
-                <Phone className="w-5 h-5 text-pine-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  id="res-telefono"
-                  type="tel"
-                  required
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  placeholder="987 654 321"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-pine-500/30 text-pine-900 font-medium focus:outline-none focus:ring-2 focus:ring-crimson-600"
-                />
-              </div>
+            <div className="relative">
+              <User className="w-5 h-5 text-pine-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                id="res-nombre"
+                type="text"
+                required
+                minLength={2}
+                maxLength={120}
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Ej. Carlos"
+                className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-pine-500/30 text-pine-900 font-medium focus:outline-none focus:ring-2 focus:ring-crimson-600"
+              />
             </div>
           </div>
 
@@ -364,12 +348,10 @@ export const ResultPage: React.FC = () => {
         <div className="mt-5 pt-4 border-t border-pine-800/15 flex items-center gap-2 text-xs text-pine-700">
           <ShieldCheck className="w-4 h-4 text-pine-700 shrink-0" />
           <span>
-            Acceso privado protegido con hash criptográfico. Nadie más puede consultar tu
-            asignación.
+            Acceso privado protegido con tu nombre de usuario único y tu PIN encriptado.
           </span>
         </div>
       </div>
     </div>
   );
 };
-
