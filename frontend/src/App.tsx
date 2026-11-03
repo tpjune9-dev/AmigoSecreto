@@ -30,8 +30,7 @@ export const App: React.FC = () => {
             </main>
             <footer className="py-6 px-4 text-center text-xs text-cream-200/60 border-t border-gold-500/15 bg-pine-950/80">
               <p>
-                🎁 <strong>Amigo Secreto</strong> — Sistema Web de Sorteos Navideños con React,
-                Node.js, Express, Prisma y MySQL.
+                🎁 <strong>Amigo Secreto</strong> — Sistema Web de Sorteos Navideños.
               </p>
             </footer>
           </div>
