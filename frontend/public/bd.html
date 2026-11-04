@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visor de Base de Datos en la Nube 24/7 — Amigo Secreto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 sm:p-8 font-sans">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div>
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Cloud KV Storage (AppKey: ne2qcuhv)</span>
+        <h1 class="text-2xl font-bold text-white mt-0.5">🗄️ Visor de Datos en la Nube — Amigo Secreto</h1>
+        <p class="text-xs sm:text-sm text-slate-400">Consulta en tiempo real las tablas almacenadas en la nube 24/7.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="emailInput" type="email" value="tpjune9@gmail.com" placeholder="Email del administrador"
+          class="px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-emerald-500" />
+        <button onclick="cargarDatos()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition">
+          Actualizar
+        </button>
+      </div>
+    </div>
+
+    <div id="estadoCarga" class="text-sm text-slate-400">Cargando datos desde la nube...</div>
+
+    <!-- Tabla Administradores -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <h2 class="text-lg font-bold text-amber-400 mb-3">1. Tabla: administradores</h2>
+      <div id="tablaAdmin" class="overflow-x-auto text-xs sm:text-sm"></div>
+    </div>
+
+    <!-- Tabla Sorteos -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <h2 class="text-lg font-bold text-emerald-400 mb-3">2. Tabla: sorteos</h2>
+      <div id="tablaSorteos" class="overflow-x-auto text-xs sm:text-sm"></div>
+    </div>
+
+    <!-- Tabla Participantes -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <h2 class="text-lg font-bold text-sky-400 mb-3">3. Tabla: participantes</h2>
+      <div id="tablaParticipantes" class="overflow-x-auto text-xs sm:text-sm"></div>
+    </div>
+
+    <!-- Tabla Asignaciones -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <h2 class="text-lg font-bold text-rose-400 mb-3">4. Tabla: asignaciones (IDs internos)</h2>
+      <div id="tablaAsignaciones" class="overflow-x-auto text-xs sm:text-sm"></div>
+    </div>
+
+    <!-- JSON Crudo -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">JSON Decodificado Completo</h2>
+      <pre id="jsonCrudo" class="bg-slate-950 p-4 rounded-xl text-xs text-emerald-300 overflow-x-auto"></pre>
+    </div>
+  </div>
+
+  <script>
+    const CLOUD_KV_BASE = 'https://keyvalue.immanuel.co/api/KeyVal';
+    const CLOUD_APP_KEY = 'ne2qcuhv';
+
+    function toBase64Url(str) {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function fromBase64Url(b64url) {
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+      const binary = atob(b64 + pad);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    }
+
+    async function rawGetKey(key) {
+      const res = await fetch(`${CLOUD_KV_BASE}/GetValue/${CLOUD_APP_KEY}/${encodeURIComponent(key)}`, { cache: 'no-store' });
+      const text = await res.text();
+      try {
+        const parsed = JSON.parse(text);
+        return typeof parsed === 'string' ? parsed : '';
+      } catch {
+        return text.replace(/^"|"$/g, '');
+      }
+    }
+
+    async function cloudGet(key) {
+      const raw = await rawGetKey(key);
+      if (!raw || raw === 'EMPTY') return null;
+      let fullB64 = raw;
+      if (raw.startsWith('CHUNKS_')) {
+        const count = Number(raw.slice(7));
+        const chunks = await Promise.all(Array.from({ length: count }, (_, i) => rawGetKey(`${key}_c${i}`)));
+        fullB64 = chunks.join('');
+      }
+      try {
+        return JSON.parse(fromBase64Url(fullB64));
+      } catch {
+        return null;
+      }
+    }
+
+    async function cargarDatos() {
+      const estado = document.getElementById('estadoCarga');
+      const email = document.getElementById('emailInput').value.trim().toLowerCase();
+      estado.textContent = 'Consultando servidor en la nube...';
+
+      try {
+        const adminKey = 'adm_' + toBase64Url(email).slice(0, 48);
+        const admin = await cloudGet(adminKey);
+
+        if (!admin) {
+          estado.textContent = `No se encontró administrador con el correo: ${email}`;
+          document.getElementById('tablaAdmin').innerHTML = '<p class="text-slate-500">Sin registros</p>';
+          return;
+        }
+
+        const codigos = admin.codigos || [];
+        const bundles = (await Promise.all(codigos.map(c => cloudGet('srt_' + c)))).filter(Boolean);
+
+        // Render Admin
+        document.getElementById('tablaAdmin').innerHTML = `
+          <table class="w-full text-left border-collapse">
+            <thead><tr class="border-b border-slate-800 text-slate-400"><th class="p-2">id</th><th class="p-2">nombre</th><th class="p-2">email</th><th class="p-2">password_hash</th><th class="p-2">created_at</th></tr></thead>
+            <tbody>
+              <tr class="border-b border-slate-800/60">
+                <td class="p-2 font-mono">${admin.id}</td>
+                <td class="p-2 font-semibold">${admin.nombre}</td>
+                <td class="p-2">${admin.email}</td>
+                <td class="p-2 font-mono text-xs text-slate-400">${admin.password_hash}</td>
+                <td class="p-2 text-slate-400">${admin.created_at}</td>
+              </tr>
+            </tbody>
+          </table>`;
+
+        // Render Sorteos
+        document.getElementById('tablaSorteos').innerHTML = bundles.length === 0
+          ? '<p class="text-slate-500">No hay sorteos activos.</p>'
+          : `<table class="w-full text-left border-collapse">
+              <thead><tr class="border-b border-slate-800 text-slate-400"><th class="p-2">id</th><th class="p-2">codigo_unico</th><th class="p-2">nombre</th><th class="p-2">presupuesto</th><th class="p-2">estado</th><th class="p-2">fecha_evento</th></tr></thead>
+              <tbody>
+                ${bundles.map(s => `
+                  <tr class="border-b border-slate-800/60">
+                    <td class="p-2 font-mono">${s.id}</td>
+                    <td class="p-2 font-bold text-amber-400">${s.codigo_unico}</td>
+                    <td class="p-2">${s.nombre}</td>
+                    <td class="p-2">${s.presupuesto ?? 'NULL'}</td>
+                    <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-800 text-xs">${s.estado}</span></td>
+                    <td class="p-2 text-slate-400">${s.fecha_evento}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>`;
+
+        // Render Participantes
+        const todosParticipantes = bundles.flatMap(s => (s.participantes || []).map(p => ({ ...p, codigo_unico: s.codigo_unico })));
+        document.getElementById('tablaParticipantes').innerHTML = todosParticipantes.length === 0
+          ? '<p class="text-slate-500">No hay participantes registrados.</p>'
+          : `<table class="w-full text-left border-collapse">
+              <thead><tr class="border-b border-slate-800 text-slate-400"><th class="p-2">id</th><th class="p-2">sorteo</th><th class="p-2">nombre (usuario único)</th><th class="p-2">pin_hash (bcrypt)</th><th class="p-2">created_at</th></tr></thead>
+              <tbody>
+                ${todosParticipantes.map(p => `
+                  <tr class="border-b border-slate-800/60">
+                    <td class="p-2 font-mono">${p.id}</td>
+                    <td class="p-2 font-bold text-amber-400">${p.codigo_unico}</td>
+                    <td class="p-2 font-semibold">${p.nombre}</td>
+                    <td class="p-2 font-mono text-xs text-slate-400">${p.pin_hash}</td>
+                    <td class="p-2 text-slate-400">${p.created_at}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>`;
+
+        // Render Asignaciones (solo IDs, manteniendo privacidad de nombres)
+        const todasAsignaciones = bundles.flatMap(s => (s.asignaciones || []).map(a => ({ ...a, codigo_unico: s.codigo_unico })));
+        document.getElementById('tablaAsignaciones').innerHTML = todasAsignaciones.length === 0
+          ? '<p class="text-slate-500">No hay asignaciones generadas aún.</p>'
+          : `<table class="w-full text-left border-collapse">
+              <thead><tr class="border-b border-slate-800 text-slate-400"><th class="p-2">id</th><th class="p-2">sorteo</th><th class="p-2">participante_origen_id</th><th class="p-2">participante_destino_id</th><th class="p-2">created_at</th></tr></thead>
+              <tbody>
+                ${todasAsignaciones.map(a => `
+                  <tr class="border-b border-slate-800/60">
+                    <td class="p-2 font-mono">${a.id}</td>
+                    <td class="p-2 font-bold text-amber-400">${a.codigo_unico}</td>
+                    <td class="p-2 font-mono">${a.participante_origen_id}</td>
+                    <td class="p-2 font-mono">${a.participante_destino_id}</td>
+                    <td class="p-2 text-slate-400">${a.created_at}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>`;
+
+        document.getElementById('jsonCrudo').textContent = JSON.stringify({ administrador: admin, sorteos: bundles }, null, 2);
+        estado.textContent = `Última actualización: ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        estado.textContent = 'Error al cargar datos: ' + err.message;
+      }
+    }
+
+    cargarDatos();
+  </script>
+</body>
+</html>
